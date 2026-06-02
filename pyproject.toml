@@ -1,0 +1,17 @@
+[project]
+name = "golden-fork-pipeline"
+version = "0.1.0"
+description = "Serverless food delivery ingestion pipeline — AWS Lambda + S3 + DynamoDB + Terraform"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "boto3>=1.43.19",
+    "faker>=40.20.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "moto[s3,dynamodb,sns]>=5.0",
+]
