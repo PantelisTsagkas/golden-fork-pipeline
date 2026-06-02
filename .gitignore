@@ -17,3 +17,4 @@ terraform/builds/
 
 # Generated data
 orders.csv
+generate_orders.py
