@@ -15,6 +15,7 @@ import logging
 import os
 
 import boto3
+from metrics import publish_metrics
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -74,6 +75,10 @@ def lambda_handler(event: dict, context) -> dict:
         Subject=subject[:100],  # SNS subject max 100 chars
         Message=message,
     )
+
+    publish_metrics([
+        {"name": "QuarantineAlertRows", "value": len(rows)},
+    ])
 
     logger.info("Published SNS alert: %s", subject)
 

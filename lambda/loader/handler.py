@@ -14,6 +14,7 @@ import os
 
 import boto3
 from dynamodb import batch_write_orders
+from metrics import publish_metrics
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -51,6 +52,10 @@ def lambda_handler(event: dict, context) -> dict:
     logger.info("Loading %d rows from %s into DynamoDB table %s", len(rows), filename, table_name)
 
     result = batch_write_orders(rows, table_name)
+
+    publish_metrics([
+        {"name": "LoadedRows", "value": result["written"]},
+    ])
 
     summary = {
         "statusCode": 200,

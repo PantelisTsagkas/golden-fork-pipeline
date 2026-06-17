@@ -22,6 +22,14 @@ locals {
     Environment = var.environment
     ManagedBy   = "terraform"
   }
+
+  metrics_namespace = "GoldenFork/Pipeline"
+
+  lambda_env_common = {
+    PROJECT_NAME      = var.project_name
+    ENVIRONMENT       = var.environment
+    METRICS_NAMESPACE = local.metrics_namespace
+  }
 }
 
 # =============================================================================
@@ -130,6 +138,10 @@ data "archive_file" "validator_zip" {
     content  = file("${path.module}/../lambda/shared/validators.py")
     filename = "validators.py"
   }
+  source {
+    content  = file("${path.module}/../lambda/shared/metrics.py")
+    filename = "metrics.py"
+  }
 }
 
 resource "aws_iam_role" "validator" {
@@ -157,6 +169,21 @@ data "aws_iam_policy_document" "validator_policy" {
       "${aws_s3_bucket.pipeline.arn}/quarantine/*",
     ]
   }
+  statement {
+    effect    = "Allow"
+    actions   = ["cloudwatch:PutMetricData"]
+    resources = ["*"]
+    condition {
+      test     = "StringEquals"
+      variable = "cloudwatch:namespace"
+      values   = [local.metrics_namespace]
+    }
+  }
+  statement {
+    effect    = "Allow"
+    actions   = ["sqs:SendMessage"]
+    resources = [aws_sqs_queue.validator_dlq.arn]
+  }
 }
 
 resource "aws_iam_role_policy" "validator" {
@@ -176,8 +203,14 @@ resource "aws_lambda_function" "validator" {
   timeout          = 60
   memory_size      = 256
   environment {
-    variables = { BUCKET_NAME = aws_s3_bucket.pipeline.id }
+    variables = merge(local.lambda_env_common, {
+      BUCKET_NAME = aws_s3_bucket.pipeline.id
+    })
   }
+  dead_letter_config {
+    target_arn = aws_sqs_queue.validator_dlq.arn
+  }
+  depends_on = [aws_iam_role_policy.validator]
   tags = local.common_tags
 }
 
@@ -210,6 +243,10 @@ data "archive_file" "loader_zip" {
     content  = file("${path.module}/../lambda/shared/dynamodb.py")
     filename = "dynamodb.py"
   }
+  source {
+    content  = file("${path.module}/../lambda/shared/metrics.py")
+    filename = "metrics.py"
+  }
 }
 
 resource "aws_iam_role" "loader" {
@@ -234,6 +271,21 @@ data "aws_iam_policy_document" "loader_policy" {
     actions   = ["dynamodb:BatchWriteItem"]
     resources = [aws_dynamodb_table.orders.arn]
   }
+  statement {
+    effect    = "Allow"
+    actions   = ["cloudwatch:PutMetricData"]
+    resources = ["*"]
+    condition {
+      test     = "StringEquals"
+      variable = "cloudwatch:namespace"
+      values   = [local.metrics_namespace]
+    }
+  }
+  statement {
+    effect    = "Allow"
+    actions   = ["sqs:SendMessage"]
+    resources = [aws_sqs_queue.loader_dlq.arn]
+  }
 }
 
 resource "aws_iam_role_policy" "loader" {
@@ -253,11 +305,15 @@ resource "aws_lambda_function" "loader" {
   timeout          = 60
   memory_size      = 256
   environment {
-    variables = {
+    variables = merge(local.lambda_env_common, {
       BUCKET_NAME    = aws_s3_bucket.pipeline.id
       DYNAMODB_TABLE = aws_dynamodb_table.orders.name
-    }
+    })
   }
+  dead_letter_config {
+    target_arn = aws_sqs_queue.loader_dlq.arn
+  }
+  depends_on = [aws_iam_role_policy.loader]
   tags = local.common_tags
 }
 
@@ -286,6 +342,10 @@ data "archive_file" "alerter_zip" {
     content  = file("${path.module}/../lambda/alerter/handler.py")
     filename = "handler.py"
   }
+  source {
+    content  = file("${path.module}/../lambda/shared/metrics.py")
+    filename = "metrics.py"
+  }
 }
 
 resource "aws_iam_role" "alerter" {
@@ -310,6 +370,21 @@ data "aws_iam_policy_document" "alerter_policy" {
     actions   = ["sns:Publish"]
     resources = [aws_sns_topic.quarantine_alerts.arn]
   }
+  statement {
+    effect    = "Allow"
+    actions   = ["cloudwatch:PutMetricData"]
+    resources = ["*"]
+    condition {
+      test     = "StringEquals"
+      variable = "cloudwatch:namespace"
+      values   = [local.metrics_namespace]
+    }
+  }
+  statement {
+    effect    = "Allow"
+    actions   = ["sqs:SendMessage"]
+    resources = [aws_sqs_queue.alerter_dlq.arn]
+  }
 }
 
 resource "aws_iam_role_policy" "alerter" {
@@ -329,11 +404,15 @@ resource "aws_lambda_function" "alerter" {
   timeout          = 30
   memory_size      = 128
   environment {
-    variables = {
+    variables = merge(local.lambda_env_common, {
       BUCKET_NAME   = aws_s3_bucket.pipeline.id
       SNS_TOPIC_ARN = aws_sns_topic.quarantine_alerts.arn
-    }
+    })
   }
+  dead_letter_config {
+    target_arn = aws_sqs_queue.alerter_dlq.arn
+  }
+  depends_on = [aws_iam_role_policy.alerter]
   tags = local.common_tags
 }
 

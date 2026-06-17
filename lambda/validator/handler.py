@@ -18,6 +18,7 @@ import os
 
 import boto3
 from validators import validate_row
+from metrics import publish_metrics
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -95,6 +96,14 @@ def lambda_handler(event: dict, context) -> dict:
 
     write_csv_to_s3(bucket, f"{PREFIX_CLEAN}{filename}",      clean_rows,      fieldnames)
     write_csv_to_s3(bucket, f"{PREFIX_QUARANTINE}{filename}",  quarantine_rows, quarantine_fieldnames)
+
+    quarantine_rate = (len(quarantine_rows) / total * 100) if total else 0.0
+    publish_metrics([
+        {"name": "TotalRows", "value": total},
+        {"name": "CleanRows", "value": len(clean_rows)},
+        {"name": "QuarantineRows", "value": len(quarantine_rows)},
+        {"name": "QuarantineRate", "value": quarantine_rate, "unit": "Percent"},
+    ])
 
     summary = {
         "statusCode":        200,

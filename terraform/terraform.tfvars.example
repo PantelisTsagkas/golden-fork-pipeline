@@ -1,0 +1,8 @@
+# Copy to terraform.tfvars and fill in your values (terraform.tfvars is gitignored).
+aws_region  = "eu-north-1"
+bucket_name = "your-globally-unique-bucket-name"
+alert_email = "you@example.com"
+
+# Optional overrides:
+# project_name = "golden-fork"
+# environment  = "dev"

@@ -9,7 +9,8 @@ terraform/.terraform/
 terraform/builds/
 *.tfstate
 *.tfstate.backup
-.terraform.lock.hcl
+terraform/terraform.tfvars
+terraform/*.auto.tfvars
 
 # IDE
 .vscode/

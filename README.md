@@ -40,6 +40,9 @@ flowchart LR
 - **Storage:** S3 (versioned, encrypted, private)
 - **Database:** DynamoDB (on-demand, PITR enabled)
 - **Alerting:** SNS (email subscription)
+- **Observability:** CloudWatch metrics + dashboard
+- **Resilience:** SQS dead-letter queues for failed Lambda invocations
+- **Analytics:** Athena + Glue catalog over quarantine data
 - **IaC:** Terraform
 - **Testing:** pytest + moto (local AWS mocking)
 - **Tooling:** uv (package manager)
@@ -56,9 +59,13 @@ golden-fork-pipeline/
 │       ├── validators.py       # Row validation logic
 │       └── dynamodb.py         # BatchWriteItem helper
 ├── terraform/
-│   ├── main.tf                 # All infrastructure
+│   ├── main.tf                 # Core infrastructure
+│   ├── observability.tf        # CloudWatch dashboard
+│   ├── sqs.tf                  # Lambda dead-letter queues
+│   ├── athena.tf               # Glue catalog + Athena workgroup
 │   ├── variables.tf            # Input variables
-│   └── outputs.tf              # Useful outputs
+│   ├── outputs.tf              # Useful outputs
+│   └── terraform.tfvars.example
 ├── tests/
 │   ├── test_validator_handler.py
 │   ├── test_loader_handler.py
@@ -90,16 +97,15 @@ make coverage         # Run with coverage report
 ```bash
 cd terraform
 
-# Create a terraform.tfvars file
-cat > terraform.tfvars << EOF
-bucket_name = "your-unique-bucket-name"
-alert_email = "your@email.com"
-EOF
+# Copy the example and edit with your values (terraform.tfvars is gitignored)
+cp terraform.tfvars.example terraform.tfvars
 
 terraform init
 terraform plan
 terraform apply
 ```
+
+After apply, check `terraform output` for the CloudWatch dashboard URL, Athena workgroup name, and sample SQL queries.
 
 ### Run the Pipeline
 
@@ -107,6 +113,40 @@ terraform apply
 # Upload a CSV to trigger the pipeline
 aws s3 cp orders.csv s3://your-bucket-name/raw/orders.csv
 ```
+
+## Operations
+
+### CloudWatch dashboard
+
+The `golden-fork-pipeline` dashboard shows row counts, quarantine rate, loaded rows, and alert volume after each upload. Open it via:
+
+```bash
+terraform output cloudwatch_dashboard_url
+```
+
+### SQS dead-letter queues (DLQ)
+
+Each Lambda has a dead-letter queue. If a Lambda **crashes** (unhandled exception, timeout) after AWS exhausts its async retry attempts, the failed S3 event payload is sent to the DLQ instead of being lost silently.
+
+```bash
+terraform output validator_dlq_url
+aws sqs receive-message --queue-url "$(terraform output -raw validator_dlq_url)"
+```
+
+DLQs capture **infrastructure failures** (Lambda errors), not business-rule validation failures — those still go to S3 `quarantine/`.
+
+### Query quarantine data with Athena
+
+No need to download CSVs. In the Athena console (workgroup: `golden-fork-pipeline`):
+
+```sql
+SELECT validation_failures, COUNT(*) AS row_count
+FROM golden-fork_pipeline.quarantine_orders
+GROUP BY validation_failures
+ORDER BY row_count DESC;
+```
+
+More sample queries: `terraform output athena_sample_queries`
 
 ## Testing
 
