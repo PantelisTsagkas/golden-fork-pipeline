@@ -18,4 +18,4 @@ terraform/*.auto.tfvars
 
 # Generated data
 orders.csv
-generate_orders.py
+

@@ -12,7 +12,7 @@ flowchart LR
     L1 -->|invalid rows| S3_QUARANTINE["S3 /quarantine"]
     S3_CLEAN -->|trigger| L2[λ Loader]
     S3_QUARANTINE -->|trigger| L3[λ Alerter]
-    S3_QUARANTINE -->|catalog| GLUE[Glue Catalog]
+    S3_QUARANTINE -.->|S3 prefix| GLUE[Glue Catalog]
     L2 -->|batch write| DDB[(DynamoDB)]
     L3 -->|publish| SNS[SNS Email Alert]
     GLUE -->|SQL queries| ATHENA[Athena]
@@ -36,7 +36,6 @@ Every row is checked against all of the following before being routed:
 | `customer_name` | Required, non-empty |
 | `delivery_address` | Required, non-empty |
 | `order_status` | Must be one of: `delivered`, `cancelled`, `in_transit`, `preparing` |
-| `payment_method` | Must be one of: `card`, `cash`, `wallet`, `voucher` |
 | `order_timestamp` | ISO-8601 format (`YYYY-MM-DDTHH:MM:SS`) |
 | `subtotal_gbp` | Non-negative |
 | `delivery_fee_gbp` | Non-negative, maximum £20 |
@@ -88,6 +87,7 @@ golden-fork-pipeline/
 ├── generate_orders.py          # Synthetic data generator (500 rows, ~18% dirty)
 ├── Makefile
 ├── pyproject.toml
+├── LICENSE
 └── .gitignore
 ```
 
@@ -121,7 +121,9 @@ terraform plan
 terraform apply
 ```
 
-After `apply`, run `terraform output` to retrieve:
+After `apply`, confirm the SNS email subscription sent to `alert_email` (check your inbox — alerts will not arrive until you click **Confirm subscription**).
+
+Then run `terraform output` to retrieve:
 
 - The CloudWatch dashboard URL
 - The Athena workgroup name and sample SQL queries
@@ -148,7 +150,7 @@ The upload triggers the Validator automatically. Clean rows flow to DynamoDB via
 
 ### CloudWatch Dashboard
 
-The `golden-fork-pipeline` dashboard shows total rows, clean rows, quarantine rows, quarantine rate (%), loaded rows, and alert volume — one data point per upload.
+The CloudWatch dashboard (default name: `golden-fork-pipeline`, from `project_name = "golden-fork"`) shows total rows, clean rows, quarantine rows, quarantine rate (%), loaded rows, and alert volume — one data point per upload.
 
 ```bash
 terraform output cloudwatch_dashboard_url
@@ -173,7 +175,7 @@ DLQ message retention is set to 14 days.
 
 The Glue catalog exposes `/quarantine` as an external table so you can query failure patterns with SQL — no CSV downloads required.
 
-Open the Athena console, select workgroup `golden-fork-pipeline`, and run:
+Open the Athena console, select workgroup `golden-fork-pipeline` (default; tied to `project_name`), and run:
 
 ```sql
 -- Failure breakdown by category
@@ -207,4 +209,4 @@ Each Lambda handler is loaded in isolation via `importlib` to prevent module sta
 
 ## License
 
-MIT
+[MIT](LICENSE)
