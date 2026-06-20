@@ -19,3 +19,6 @@ terraform/*.auto.tfvars
 # Generated data
 orders.csv
 
+# Claude Code
+CLAUDE.md
+
